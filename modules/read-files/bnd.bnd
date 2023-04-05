@@ -1,0 +1,4 @@
+Bundle-Name: read-files
+Bundle-SymbolicName: read.files
+Bundle-Version: 1.0.0
+Export-Package: read.files.constants
