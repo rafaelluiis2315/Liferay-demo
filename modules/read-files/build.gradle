@@ -7,4 +7,7 @@ dependencies {
 	implementation group: 'org.apache.poi', name: 'poi-ooxml-full', version: '5.0.0'
 	// https://mvnrepository.com/artifact/org.apache.poi/poi
 	implementation group: 'org.apache.poi', name: 'poi', version: '5.0.0'
+
+	// https://mvnrepository.com/artifact/org.projectlombok/lombok
+	compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.24'
 }

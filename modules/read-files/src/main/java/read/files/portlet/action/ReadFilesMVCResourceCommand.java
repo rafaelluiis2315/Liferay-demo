@@ -3,57 +3,62 @@ package read.files.portlet.action;
 
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
-import com.liferay.portal.kernel.portlet.bridges.mvc.BaseMVCActionCommand;
-import com.liferay.portal.kernel.portlet.bridges.mvc.MVCActionCommand;
+import com.liferay.portal.kernel.portlet.bridges.mvc.MVCResourceCommand;
 import com.liferay.portal.kernel.upload.UploadPortletRequest;
 import com.liferay.portal.kernel.util.PortalUtil;
+import lombok.Cleanup;
+import lombok.SneakyThrows;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.osgi.service.component.annotations.Component;
 import read.files.constants.MVCCommandNames;
 import read.files.constants.ReadFilesPortletKeys;
-
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.CellValue;
-import org.apache.poi.ss.usermodel.FormulaEvaluator;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
-import javax.portlet.ActionRequest;
-import javax.portlet.ActionResponse;
-
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
 
 
 @Component(
         property = {
                 "javax.portlet.name=" + ReadFilesPortletKeys.READFILES,
                 "mvc.command.name=" + MVCCommandNames.READ_FILES_UPLOADE_URL
-        }, immediate = true, service = MVCActionCommand.class
+        }, service = MVCResourceCommand.class
 )
-public class ReadFilesMVCResourceCommand extends BaseMVCActionCommand {
+public class ReadFilesMVCResourceCommand implements MVCResourceCommand {
     private static final Log LOG = LogFactoryUtil.getLog(ReadFilesMVCResourceCommand.class);
 
-    @Override
-    public void doProcessAction(ActionRequest actionRequest, ActionResponse actionResponse)  {
-        UploadPortletRequest uploadPortletRequest = PortalUtil.getUploadPortletRequest(actionRequest);
-        String fileName = uploadPortletRequest.getFileName(MVCCommandNames.DATA_FILE);
+
+    public boolean serveResource(ResourceRequest resourceRequest, ResourceResponse resourceResponse)  {
+        InputStream file = null;
+        try {
+            file = resourceRequest.getPortletInputStream();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        String fileName = resourceRequest.getProperty(MVCCommandNames.DATA_FILE);
 
         LOG.info(fileName);
 
         File testMapFile = new File("/tmp/" + fileName);
-        LOG.info("Test Map File ===> " + testMapFile);
 
-
-        InputStream inputStream = null;
         try {
-            inputStream = uploadPortletRequest.getFileAsStream(MVCCommandNames.DATA_FILE);
 
-            Workbook workbook = WorkbookFactory.create(inputStream);
+
+            Workbook workbook;
+
+            if (testMapFile.getName().contains(".xls")) {
+                 workbook = new XSSFWorkbook(file);
+            }else {
+                 workbook = new HSSFWorkbook(file);
+            }
+
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
 
             Sheet sheetSummary = workbook.getSheetAt(0);
 
@@ -66,42 +71,47 @@ public class ReadFilesMVCResourceCommand extends BaseMVCActionCommand {
                 while (cellIterator.hasNext()) {
                     Cell cell = cellIterator.next();
 
-                    if (cell.getCellType() == CellType.valueOf("STRING")) LOG.info(cell.getStringCellValue());
+                    switch (cell.getCellType()) {
+                        case BOOLEAN:
+                            LOG.info(cell.getBooleanCellValue());
+                            break;
+                        case NUMERIC:
+                            LOG.info(cell.getNumericCellValue());
+                            break;
+                        case STRING:
+                            LOG.info(cell.getStringCellValue());
+                            break;
+                        case FORMULA:
+                            CellValue cellValue = evaluator.evaluate(cell);
 
-
-                    if (cell.getCellType() == CellType.FORMULA) {
-                        FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-                        CellValue cellValue = evaluator.evaluate(cell);
-                        switch (cellValue.getCellType()) {
-                            case BOOLEAN:
-                                LOG.info(cellValue.getBooleanValue());
-                                break;
-                            case NUMERIC:
-                                LOG.info(cellValue.getNumberValue());
-                                break;
-                            case STRING:
-                                LOG.info(cellValue.getStringValue());
-                                break;
-                            default:
-                                LOG.info("Unsupported cell type");
-                        }
+                            switch (cellValue.getCellType()) {
+                                case BOOLEAN:
+                                    System.out.println(cellValue.getBooleanValue());
+                                    break;
+                                case NUMERIC:
+                                    System.out.println(cellValue.getNumberValue());
+                                    break;
+                                case STRING:
+                                    System.out.println(cellValue.getStringValue());
+                                    break;
+                                default:
+                                    LOG.info("Unsupported cell type");
+                            }
+                        default:
+                            LOG.info("Unsupported cell type");
                     }
+
 
 
                 }
             }
 
-
+            return false;
         } catch (Exception e) {
             LOG.error("Error while processing action: " + e.getMessage(), e);
-        } finally {
-            try {
-                inputStream.close();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            return true;
         }
-
     }
+
 
 }
